@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>콧수염 냥이의 점프!</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #87CEEB;
+            overflow: hidden;
+            font-family: 'Jua', sans-serif;
+            touch-action: manipulation;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            box-shadow: 0px 8px 20px rgba(0,0,0,0.3);
+        }
+
+        /* UI 레이어 */
+        #ui-layer {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .ui-text {
+            font-size: 24px;
+            color: white;
+            text-shadow: 2px 2px 0 #000;
+        }
+
+        /* 스크린 공통 스타일 */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 30;
+            color: white;
+            text-align: center;
+        }
+
+        #title-screen { background-color: rgba(255, 255, 255, 0.9); color: #333; }
+        
+        /* 주인공 이미지 (타이틀용) */
+        #title-image { 
+            width: 150px; 
+            height: auto; 
+            margin-bottom: 20px; 
+            animation: bounce 1s infinite alternate; 
+        }
+
+        /* 결과 화면 이미지 */
+        .result-image {
+            width: 200px;
+            height: auto;
+            margin-bottom: 20px;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .result-title { font-size: 50px; margin: 0; color: #FFD700; text-shadow: 3px 3px 0 #FF4500; }
+        .result-text { font-size: 24px; margin-top: 10px; color: #fff; }
+
+        /* 버튼 스타일 */
+        .retry-button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-family: 'Jua', sans-serif;
+            color: white;
+            background-color: #FF4500;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px #992600;
+            transition: transform 0.1s;
+            animation: pulse 1.5s infinite;
+        }
+        .retry-button:active {
+            box-shadow: 0 2px #992600;
+            transform: translateY(4px);
+        }
+
+        /* 인게임 응원 효과 */
+        #cheer-layer {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            z-index: 15;
+            pointer-events: none;
+            transition: transform 0.2s;
+        }
+        #cheer-layer.show { transform: translate(-50%, -50%) scale(1); }
+        #cheer-image { width: 180px; filter: drop-shadow(0 0 10px gold); }
+
+        @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+        @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="ui-layer">
+            <div class="ui-text">⏰ <span id="time-left">60</span>초</div>
+            <div class="ui-text">🚩 <span id="score-count">0</span> / 10</div>
+        </div>
+
+        <div id="cheer-layer">
+            <img src="image_2.png" id="cheer-image" alt="응원">
+        </div>
+
+        <div id="title-screen" class="screen" onclick="startGame()">
+            <img src="image_1.png" alt="주인공" id="title-image">
+            <h1>콧수염 냥이 점프!</h1>
+            <p>화면 터치해서 시작!</p>
+            <p style="font-size:18px; color:#666;">(1분 안에 장애물 10개 넘기)</p>
+        </div>
+
+        <div id="success-screen" class="screen hidden">
+            <img src="image_2.png" alt="성공" class="result-image">
+            <h1 class="result-title">잘했어!!</h1>
+            <p class="result-text">역시 최고야!</p>
+            <button class="retry-button" onclick="resetGame()">다시 할래</button>
+        </div>
+
+        <div id="fail-screen" class="screen hidden">
+            <img src="image_3.png" alt="실패" class="result-image">
+            <h1 class="result-title" style="color: #aaa;">zZZ...</h1>
+            <p class="result-text" id="fail-reason">조금만 더 힘내!</p>
+            <button class="retry-button" style="background-color:#555;" onclick="resetGame()">다시 할래</button>
+        </div>
+    </div>
+
+    <audio id="bgMusic" src="https://assets.mixkit.co/music/preview/mixkit-playground-fun-14.mp3" loop></audio>
+    <audio id="jumpSound" src="https://assets.mixkit.co/sfx/preview/mixkit-quick-jump-arcade-game-239.mp3"></audio>
+    <audio id="passSound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-score-interface-217.mp3"></audio>
+    <audio id="winSound" src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3"></audio>
+    <audio id="loseSound" src="https://assets.mixkit.co/sfx/preview/mixkit-cartoon-failure-piano-2569.mp3"></audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 요소 가져오기
+        const titleScreen = document.getElementById('title-screen');
+        const successScreen = document.getElementById('success-screen');
+        const failScreen = document.getElementById('fail-screen');
+        const failReason = document.getElementById('fail-reason');
+        const timeLeftDisplay = document.getElementById('time-left');
+        const scoreCountDisplay = document.getElementById('score-count');
+        const cheerLayer = document.getElementById('cheer-layer');
+        const uiLayer = document.getElementById('ui-layer');
+
+        const sounds = {
+            bgm: document.getElementById('bgMusic'),
+            jump: document.getElementById('jumpSound'),
+            pass: document.getElementById('passSound'),
+            win: document.getElementById('winSound'),
+            lose: document.getElementById('loseSound')
+        };
+        sounds.bgm.volume = 0.4;
+
+        // 게임 설정
+        let frames = 0;
+        let score = 0;
+        const GOAL = 10;
+        let timeLeft = 60;
+        let timerInterval;
+        let gameState = 'start';
+
+        // 이미지 설정 (사용자가 저장한 이름과 매칭)
+        const playerImg = new Image(); playerImg.src = 'image_1.png'; // 콧수염 고양이
+        const bgImg = { width: 0, height: 0 }; // 배경용
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth > 500 ? 500 : window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 주인공 (콧수염 고양이)
+        const cat = {
+            x: 50,
+            y: 150,
+            width: 50,
+            height: 50,
+            gravity: 0.15,
+            jumpPower: -3.8,
+            velocity: 0,
+            
+            draw: function() {
+                ctx.drawImage(playerImg, this.x, this.y, this.width, this.height);
+            },
+            update: function() {
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+
+                if (this.y + this.height >= canvas.height - fg.height) {
+                    this.y = canvas.height - fg.height - this.height;
+                    endGame('fail', '바닥에 닿았어 zZZ');
+                }
+                if (this.y < 0) { this.y = 0; this.velocity = 0; }
+            },
+            flap: function() {
+                this.velocity = this.jumpPower;
+                sounds.jump.currentTime = 0;
+                sounds.jump.play();
+            }
+        };
+
+        // 배경 & 바닥
+        const bg = {
+            draw: function() {
+                let g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                g.addColorStop(0, "#87CEEB"); g.addColorStop(1, "#E0F7FA");
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        };
+        const fg = {
+            height: 100, x: 0,
+            draw: function() {
+                ctx.fillStyle = '#6DA34D';
+                ctx.fillRect(this.x, canvas.height - this.height, canvas.width, this.height);
+                ctx.fillRect(this.x + canvas.width, canvas.height - this.height, canvas.width, this.height);
+            },
+            update: function() { this.x = (this.x - 2) % (canvas.width); }
+        };
+
+        // 장애물
+        const pipes = {
+            position: [],
+            width: 60,
+            gap: 190, // 쉽게
+            dx: 2,
+            
+            draw: function() {
+                ctx.fillStyle = '#8B4513';
+                for(let i=0; i<this.position.length; i++){
+                    let p = this.position[i];
+                    let topY = p.y;
+                    let botY = p.y + this.gap;
+                    ctx.fillRect(p.x, 0, this.width, topY);
+                    ctx.fillRect(p.x, botY, this.width, canvas.height - botY - fg.height);
+                    
+                    // 테두리
+                    ctx.strokeStyle = '#5E2605'; ctx.lineWidth = 2;
+                    ctx.strokeRect(p.x, 0, this.width, topY);
+                    ctx.strokeRect(p.x, botY, this.width, canvas.height - botY - fg.height);
+                }
+            },
+            update: function() {
+                if(frames % 220 === 0) {
+                    this.position.push({
+                        x: canvas.width,
+                        y: Math.random() * (canvas.height - fg.height - 300) + 50
+                    });
+                }
+                for(let i=0; i<this.position.length; i++){
+                    let p = this.position[i];
+                    p.x -= this.dx;
+
+                    // 충돌 체크
+                    if(cat.x + cat.width - 5 > p.x && cat.x + 5 < p.x + this.width &&
+                       (cat.y + 5 < p.y || cat.y + cat.height - 5 > p.y + this.gap)) {
+                        endGame('fail', '부딪혔어 zZZ');
+                    }
+
+                    // 점수
+                    if(p.x + this.width < cat.x && !p.passed) {
+                        score++;
+                        scoreCountDisplay.innerText = score;
+                        p.passed = true;
+                        sounds.pass.currentTime = 0;
+                        sounds.pass.play();
+                        
+                        // 응원 효과 (이미지 2번 등장)
+                        cheerLayer.classList.add('show');
+                        setTimeout(()=> cheerLayer.classList.remove('show'), 800);
+
+                        if(score >= GOAL) endGame('success');
+                    }
+                    if(p.x + this.width <= 0) { this.position.shift(); i--; }
+                }
+            }
+        };
+
+        function startTimer() {
+            timeLeft = 60;
+            timeLeftDisplay.innerText = timeLeft;
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timeLeftDisplay.innerText = timeLeft;
+                if(timeLeft <= 0) endGame('fail', '시간 초과 zZZ');
+            }, 1000);
+        }
+
+        function draw() {
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            bg.draw(); pipes.draw(); fg.draw(); cat.draw();
+        }
+        function update() { cat.update(); fg.update(); pipes.update(); }
+        function loop() {
+            if(gameState === 'playing') { update(); draw(); frames++; requestAnimationFrame(loop); }
+        }
+
+        function startGame() {
+            if(gameState === 'start') {
+                gameState = 'playing';
+                titleScreen.classList.add('hidden');
+                uiLayer.classList.remove('hidden');
+                sounds.bgm.play();
+                startTimer();
+                loop();
+            }
+        }
+
+        function endGame(type, reason) {
+            gameState = type;
+            clearInterval(timerInterval);
+            sounds.bgm.pause();
+            uiLayer.classList.add('hidden');
+            
+            if(type === 'success') {
+                sounds.win.play();
+                successScreen.classList.remove('hidden');
+            } else {
+                sounds.lose.play();
+                failReason.innerText = reason;
+                failScreen.classList.remove('hidden');
+            }
+        }
+
+        function resetGame() {
+            cat.y = 150; cat.velocity = 0;
+            pipes.position = [];
+            score = 0; frames = 0;
+            scoreCountDisplay.innerText = 0;
+            timeLeftDisplay.innerText = 60;
+            
+            successScreen.classList.add('hidden');
+            failScreen.classList.add('hidden');
+            titleScreen.classList.remove('hidden');
+            gameState = 'start';
+            draw();
+        }
+
+        document.addEventListener('touchstart', (e)=>{
+            if(gameState==='playing') cat.flap();
+            else if(gameState==='start') startGame();
+        });
+        document.addEventListener('keydown', (e)=>{
+            if(e.code==='Space') {
+                if(gameState==='playing') cat.flap();
+                else if(gameState==='start') startGame();
+            }
+        });
+
+        playerImg.onload = draw;
+    </script>
+</body>
+</html>
